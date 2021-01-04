@@ -76,9 +76,9 @@ class SebStatementParser(StatementParser):
     def _validate(self):
         sheet = self.workbook.active
 
-        logging.info('Checking that sheet has at least 5 rows.')
-        rows = take(5, sheet.iter_rows())
-        assert len(rows) == 5
+        logging.info('Checking that sheet has at least 8 rows.')
+        rows = take(8, sheet.iter_rows())
+        assert len(rows) == 8
 
         logging.info('Verifying that every row has 6 cells.')
         assert type(rows) == list
@@ -88,14 +88,10 @@ class SebStatementParser(StatementParser):
         logging.info('Extracting values from every cell.')
         rows = [[c.value for c in row] for row in rows]
 
-        logging.info('Verifying summary header.')
-        summary_header_row = rows[0]
-        assert ['Saldo', 'Disponibelt belopp', 'Beviljad kredit', None, None] == summary_header_row[1:]
-
         logging.info('Verifying account id.')
-        summary_account_row = rows[1]
+        summary_account_row = rows[4]
         account_id = summary_account_row[0]
-        assert re.match('^[0-9]+$', account_id)
+        assert re.match('^\w+\s\(([0-9\s]+)\)$', account_id)
         assert [None, None] == summary_account_row[-2:]
 
         def is_footer(row):
@@ -104,18 +100,13 @@ class SebStatementParser(StatementParser):
                     return True
             return False
 
-        logging.info('Verifying summary footer.')
-        summary_footer_row = rows[2]
-        assert is_footer(summary_footer_row)
-        assert [None, None, None, None, None] == summary_footer_row[1:]
-
         logging.info('Verifying empty row.')
-        empty_row = rows[3]
+        empty_row = rows[5]
         assert [None, None, None, None, None, None] == empty_row
 
         logging.info('Verifying statements header.')
-        statement_header_row = rows[4]
-        assert ['Bokföringsdatum', 'Valutadatum', 'Verifikationsnummer', 'Text/mottagare', 'Belopp', 'Saldo'] == statement_header_row
+        statement_header_row = rows[7]
+        assert ['Bokföringsdatum', 'Valutadatum', 'Verifikationsnummer', 'Text', 'Belopp', 'Saldo'] == statement_header_row
 
         logging.info('Everything is OK!')
 
@@ -123,33 +114,25 @@ class SebStatementParser(StatementParser):
         statement = Statement()
         sheet = self.workbook.active
 
-        # We need only first 3 rows here.
-        rows = take(3, sheet.iter_rows())
+        # We need first 8 rows
+        rows = take(8, sheet.iter_rows())
         rows = [[c.value for c in row] for row in rows]
 
-        assert len(rows) == 3
-        header_row, account_row, footer_row = rows
+        assert len(rows) == 8
+        account_row = rows[4]
 
-        account_id, saldo, disponibelt_belopp, beviljad_kredit, _1, _2 = account_row
-        statement.account_id = account_id
-        statement.end_balance = atof(saldo, self.locale)
+        account_id = re.match('^\w+\s\(([0-9\s]+)\)$', account_row[0])
+        statement.account_id = account_id[1]
         statement.bank_id = self.bank_id
         statement.currency = self.currency_id
-
-        for r in self.footer_regexps:
-            m = re.match(r, footer_row[0])
-            if m and m.groups():
-                part_from, part_to = m.groups()
-                statement.start_date = self.parse_datetime(part_from)
-                statement.end_date = self.parse_datetime(part_to)
-
+        
         return statement
 
     def split_records(self):
         sheet = self.workbook.active
 
-        # Skip first 5 rows. Headers they are.
-        for row in itertools.islice(sheet.iter_rows(), 5, None):
+        # Skip first 8 rows. Headers they are.
+        for row in itertools.islice(sheet.iter_rows(), 8, None):
             yield [c.value for c in row]
 
     def parse_record(self, row):
